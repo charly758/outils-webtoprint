@@ -166,8 +166,24 @@ def traiter_stock(file):
 # 3. FONCTION : SUIVI COLIS (DPD)
 # ==========================================
 def traiter_suivi_colis(file, reference_dossier):
+    # 1. Lecture de base avec Pandas
     df = pd.read_excel(file)
     
+    # 2. Lecture approfondie avec openpyxl pour récupérer les VRAIS liens web
+    wb_in = openpyxl.load_workbook(file)
+    ws_in = wb_in.active
+    
+    # La colonne "Tracing du colis" est la 24ème (index 23)
+    urls = []
+    for r in range(2, len(df) + 2):
+        cell = ws_in.cell(row=r, column=24)
+        # Si la case contient un vrai hyperlien, on le récupère, sinon on garde le texte
+        urls.append(cell.hyperlink.target if cell.hyperlink else cell.value)
+        
+    if len(df.columns) >= 24:
+        df.iloc[:, 23] = urls # On remplace le faux texte par le vrai lien web
+    
+    # 3. Filtrage du dossier
     ref_col_name = df.columns[1]
     df[ref_col_name] = df[ref_col_name].astype(str).str.strip()
     reference_propre = str(reference_dossier).strip()
@@ -177,6 +193,7 @@ def traiter_suivi_colis(file, reference_dossier):
     if df_filtre.empty:
         raise ValueError(f"⚠️ Aucune commande trouvée pour le dossier N° {reference_propre}. Vérifiez le numéro saisi.")
     
+    # 4. Conservation des 13 colonnes utiles par leur position
     indices_a_garder = [0, 1, 6, 9, 11, 13, 14, 15, 17, 18, 21, 22, 23]
     
     if len(df.columns) <= max(indices_a_garder):
@@ -192,6 +209,7 @@ def traiter_suivi_colis(file, reference_dossier):
     df_final.to_excel(temp_buffer, index=False)
     temp_buffer.seek(0)
     
+    # 5. Mise en forme finale et création du lien cliquable
     wb = openpyxl.load_workbook(temp_buffer)
     ws = wb.active
     ws.title = f"Dossier {reference_propre}"
@@ -202,6 +220,16 @@ def traiter_suivi_colis(file, reference_dossier):
     for cell in ws[1]:
         cell.fill, cell.font, cell.alignment = header_fill, header_font, Alignment(horizontal="center", vertical="center")
         
+    # Ajustement largeur et transformation des liens
+    for r in range(2, ws.max_row + 1):
+        cell_lien = ws.cell(row=r, column=13) # La colonne Tracing est maintenant la 13ème
+        val = str(cell_lien.value)
+        if val.startswith("http"):
+            cell_lien.hyperlink = val
+            cell_lien.value = "Lien URL" # Le texte propre qui s'affiche
+            cell_lien.font = Font(color="0563C1", underline="single") # Style bleu souligné
+            cell_lien.alignment = Alignment(horizontal="center", vertical="center")
+
     for col in ws.columns:
         max_length = max((len(str(c.value)) if c.value else 0 for c in col), default=0)
         ws.column_dimensions[col[0].column_letter].width = min(max_length + 3, 50)
@@ -213,6 +241,7 @@ def traiter_suivi_colis(file, reference_dossier):
     final_buffer.seek(0)
     return final_buffer
 
+
 # ==========================================
 # INTERFACE UTILISATEUR STREAMLIT
 # ==========================================
@@ -221,7 +250,7 @@ st.title("🖨️ Outils Web-to-Print")
 outil = st.sidebar.radio("Sélectionnez l'outil :", [
     "Facturation Mensuelle", 
     "Nettoyage des Stocks",
-    "Extraction Suivi Colis"
+    "Extraction Suivi Colis (DPD)"
 ])
 
 if outil == "Facturation Mensuelle":
@@ -252,25 +281,21 @@ elif outil == "Nettoyage des Stocks":
         except Exception as e:
             st.error(f"❌ Une erreur est survenue : {e}")
 
-elif outil == "Extraction Suivi Colis":
+elif outil == "Extraction Suivi Colis (DPD)":
     st.header("Extraction des Suivis Colis (DPD)")
-    st.write("Glissez votre tableau de suivi DPD puis saisissez le numéro de dossier. Seules les lignes concernées et les colonnes utiles seront conservées.")
+    st.write("Glissez votre tableau de suivi DPD puis saisissez le numéro de dossier. L'outil génèrera un tableau ciblé avec des liens de suivi cliquables.")
     
-    # 1. On affiche d'abord la zone pour glisser le fichier
-    fichier = st.file_uploader("Importez le fichier de suivi (ex: export_dpd.xlsx)", type=["xlsx"])
+    fichier = st.file_uploader("📥 Importez le fichier de suivi (ex: export_dpd.xlsx)", type=["xlsx"])
     
     if fichier:
-        # 2. Ensuite on affiche le champ pour le numéro
         numero_dossier = st.text_input("📦 Saisissez le numéro de dossier (Votre référence 1) :", placeholder="ex: 2012217")
         
-        # 3. Le bouton de déclenchement
         if st.button("Rechercher"):
             if numero_dossier:
                 try:
                     with st.spinner(f"Recherche du dossier {numero_dossier} en cours..."):
                         fichier_traite = traiter_suivi_colis(fichier, numero_dossier)
                         
-                        # On sauvegarde le résultat en mémoire pour afficher le bouton de téléchargement
                         st.session_state['fichier_dpd_pret'] = fichier_traite
                         st.session_state['dossier_dpd_actuel'] = numero_dossier
                 except Exception as e:
@@ -278,9 +303,8 @@ elif outil == "Extraction Suivi Colis":
             else:
                 st.warning("⚠️ Veuillez saisir un numéro de dossier avant de cliquer sur Rechercher.")
                 
-    # 4. Affichage du bouton de téléchargement si la recherche a réussi
     if 'fichier_dpd_pret' in st.session_state and 'dossier_dpd_actuel' in st.session_state:
-        st.success(f"✅ Dossier {st.session_state['dossier_dpd_actuel']} extrait et mis en forme avec succès !")
+        st.success(f"✅ Dossier {st.session_state['dossier_dpd_actuel']} extrait avec succès !")
         st.download_button(
             label=f"📥 Télécharger le suivi ({st.session_state['dossier_dpd_actuel']})", 
             data=st.session_state['fichier_dpd_pret'], 
