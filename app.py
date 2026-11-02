@@ -13,18 +13,8 @@ st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        .main-title { 
-            font-size: 2.5rem; 
-            font-weight: 700; 
-            color: #222222; /* Noir Microlynx */
-            margin-bottom: 0px; 
-        }
-        .subtitle { 
-            font-size: 1.1rem; 
-            color: #BA2025; /* Rouge Agent Paper */
-            margin-bottom: 30px; 
-            font-weight: 600;
-        }
+        .main-title { font-size: 2.5rem; font-weight: 700; color: #222222; /* Noir Microlynx */ margin-bottom: 0px; }
+        .subtitle { font-size: 1.1rem; color: #BA2025; /* Rouge Agent Paper */ margin-bottom: 30px; font-weight: 600; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -98,4 +88,149 @@ def traiter_facturation(file):
     header_font = Font(bold=True, color="FFFFFF")
     
     for cell in ws[1]:
-        cell.
+        cell.fill, cell.font, cell.alignment = header_fill, header_font, Alignment(horizontal="center", vertical="center")
+    
+    col_order, col_price, col_cat, col_country = None, None, None, None
+    for idx, cell in enumerate(ws[1], 1):
+        if cell.value == 'Order ID': col_order = idx
+        elif cell.value == 'Total Order Price': col_price = idx
+        elif cell.value == 'Catégorie': col_cat = idx
+        elif cell.value == 'Ship Country Name': col_country = idx
+        
+    for r in range(2, ws.max_row + 1):
+        order_id = ws.cell(row=r, column=col_order).value if col_order else None
+        if order_id in commandes_sans_prix:
+            if col_price: ws.cell(row=r, column=col_price).fill = orange_fill
+            if col_country: ws.cell(row=r, column=col_country).fill = orange_fill
+
+        if col_price:
+            c_price = ws.cell(row=r, column=col_price)
+            if c_price.value is not None and str(c_price.value).strip() != "":
+                try: c_price.value = float(c_price.value)
+                except: pass
+                c_price.number_format = '#,##0.00 €'
+            c_price.alignment = Alignment(horizontal="center", vertical="center")
+            
+        if col_cat: ws.cell(row=r, column=col_cat).alignment = Alignment(horizontal="center", vertical="center")
+            
+    for col in ws.columns:
+        max_length = max((len(f"{c.value} €" if c.number_format == '#,##0.00 €' and c.value else str(c.value) if c.value else "") for c in col), default=0)
+        ws.column_dimensions[col[0].column_letter].width = max_length + 3
+        
+    start_row = 2
+    current_order = ws.cell(row=2, column=col_order).value if col_order else None
+    
+    for r in range(3, ws.max_row + 2):
+        order = ws.cell(row=r, column=col_order).value if r <= ws.max_row and col_order else None
+        if order != current_order:
+            if r - 1 > start_row:
+                if col_price: ws.merge_cells(start_row=start_row, start_column=col_price, end_row=r-1, end_column=col_price)
+                if col_cat: ws.merge_cells(start_row=start_row, start_column=col_cat, end_row=r-1, end_column=col_cat)
+            current_order, start_row = order, r
+
+    final_buffer = io.BytesIO()
+    wb.save(final_buffer)
+    final_buffer.seek(0)
+    return final_buffer, nb_commandes_uniques, nb_manuelles
+
+# ==========================================
+# 2. FONCTION : STOCK
+# ==========================================
+def traiter_stock(file):
+    df = pd.read_excel(file)
+    df.columns = df.columns.str.strip() 
+    colonnes_requises = ['N° de produit', 'Nom de produit', 'Stock réel', 'Unité de mesure']
+    
+    missing_cols = [c for c in colonnes_requises if c not in df.columns]
+    if missing_cols: raise ValueError(f"Il manque des colonnes : {', '.join(missing_cols)}")
+        
+    df = df[colonnes_requises].copy()
+    nb_articles = len(df)
+    
+    temp_buffer = io.BytesIO()
+    df.to_excel(temp_buffer, index=False)
+    temp_buffer.seek(0)
+    
+    wb = openpyxl.load_workbook(temp_buffer)
+    ws = wb.active
+    ws.title = "Etat des Stocks"
+    
+    header_fill = PatternFill("solid", fgColor="183153")
+    header_font = Font(bold=True, color="FFFFFF")
+    
+    for cell in ws[1]:
+        cell.fill, cell.font, cell.alignment = header_fill, header_font, Alignment(horizontal="center", vertical="center")
+        
+    for r in range(2, ws.max_row + 1):
+        ws.cell(row=r, column=1).alignment = Alignment(horizontal="center")
+        ws.cell(row=r, column=3).alignment = Alignment(horizontal="center")
+        ws.cell(row=r, column=4).alignment = Alignment(horizontal="center")
+        
+    ws.column_dimensions['A'].width = 15
+    ws.column_dimensions['B'].width = 65
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 20
+    ws.auto_filter.ref = ws.dimensions
+
+    final_buffer = io.BytesIO()
+    wb.save(final_buffer)
+    final_buffer.seek(0)
+    return final_buffer, nb_articles
+
+# ==========================================
+# 3. FONCTION : SUIVI COLIS (DPD)
+# ==========================================
+def traiter_suivi_colis(file, reference_dossier):
+    df = pd.read_excel(file)
+    wb_in = openpyxl.load_workbook(file)
+    ws_in = wb_in.active
+    
+    urls = []
+    for r in range(2, len(df) + 2):
+        cell = ws_in.cell(row=r, column=24)
+        urls.append(cell.hyperlink.target if cell.hyperlink else cell.value)
+        
+    if len(df.columns) >= 24:
+        df.iloc[:, 23] = urls 
+    
+    ref_col_name = df.columns[1]
+    df[ref_col_name] = df[ref_col_name].astype(str).str.strip()
+    reference_propre = str(reference_dossier).strip()
+    
+    df_filtre = df[df[ref_col_name] == reference_propre].copy()
+    
+    if df_filtre.empty:
+        raise ValueError(f"Aucun colis trouvé pour le dossier N° {reference_propre}.")
+    
+    indices_a_garder = [0, 1, 6, 9, 11, 13, 14, 15, 17, 18, 21, 22, 23]
+    
+    if len(df.columns) <= max(indices_a_garder):
+        raise ValueError("Le fichier ne contient pas les colonnes DPD habituelles.")
+        
+    df_final = df_filtre.iloc[:, indices_a_garder].copy()
+    nb_colis = len(df_final)
+    
+    for col in df_final.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_final[col]):
+            df_final[col] = df_final[col].dt.strftime('%d/%m/%Y')
+            
+    temp_buffer = io.BytesIO()
+    df_final.to_excel(temp_buffer, index=False)
+    temp_buffer.seek(0)
+    
+    wb = openpyxl.load_workbook(temp_buffer)
+    ws = wb.active
+    ws.title = f"Dossier {reference_propre}"
+    
+    header_fill = PatternFill("solid", fgColor="183153")
+    header_font = Font(bold=True, color="FFFFFF")
+    
+    for cell in ws[1]:
+        cell.fill, cell.font, cell.alignment = header_fill, header_font, Alignment(horizontal="center", vertical="center")
+        
+    for r in range(2, ws.max_row + 1):
+        cell_lien = ws.cell(row=r, column=13) 
+        val = str(cell_lien.value)
+        if val.startswith("http"):
+            cell_lien.hyperlink = val
+            cell_lien.value = "
