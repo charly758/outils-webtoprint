@@ -1,6 +1,6 @@
 [theme]
-primaryColor = "#1E3A8A"
-backgroundColor = "#F8FAFC"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#0F172A"
+primaryColor = "#009CA6"  # Le Cyan "MicroLynx" pour les boutons d'action
+backgroundColor = "#FFFFFF" # Fond blanc pur pour bien faire ressortir le logo
+secondaryBackgroundColor = "#F4F6F8" # Gris très très clair pour le menu de gauche
+textColor = "#222222" # Noir doux (comme le texte de votre logo)
 font = "sans serif"
