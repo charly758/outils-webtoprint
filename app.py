@@ -5,7 +5,29 @@ from openpyxl.styles import Alignment, PatternFill, Font
 import io
 
 # --- CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Outils WebToPrint", page_icon="⚙️", layout="centered")
+st.set_page_config(page_title="Portail Web-to-Print", page_icon="🚀", layout="centered")
+
+# --- CSS PERSONNALISÉ (Pour un look plus propre et pro) ---
+st.markdown("""
+    <style>
+        /* Masquer le menu technique Streamlit en haut à droite et le pied de page */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* Styliser un peu le titre principal */
+        .main-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1E3A8A;
+            margin-bottom: 0px;
+        }
+        .subtitle {
+            font-size: 1.1rem;
+            color: #6B7280;
+            margin-bottom: 30px;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 1. FONCTION : FACTURATION
@@ -166,24 +188,18 @@ def traiter_stock(file):
 # 3. FONCTION : SUIVI COLIS (DPD)
 # ==========================================
 def traiter_suivi_colis(file, reference_dossier):
-    # 1. Lecture de base avec Pandas
     df = pd.read_excel(file)
-    
-    # 2. Lecture approfondie avec openpyxl pour récupérer les VRAIS liens web
     wb_in = openpyxl.load_workbook(file)
     ws_in = wb_in.active
     
-    # La colonne "Tracing du colis" est la 24ème (index 23)
     urls = []
     for r in range(2, len(df) + 2):
         cell = ws_in.cell(row=r, column=24)
-        # Si la case contient un vrai hyperlien, on le récupère, sinon on garde le texte
         urls.append(cell.hyperlink.target if cell.hyperlink else cell.value)
         
     if len(df.columns) >= 24:
-        df.iloc[:, 23] = urls # On remplace le faux texte par le vrai lien web
+        df.iloc[:, 23] = urls 
     
-    # 3. Filtrage du dossier
     ref_col_name = df.columns[1]
     df[ref_col_name] = df[ref_col_name].astype(str).str.strip()
     reference_propre = str(reference_dossier).strip()
@@ -193,7 +209,6 @@ def traiter_suivi_colis(file, reference_dossier):
     if df_filtre.empty:
         raise ValueError(f"⚠️ Aucune commande trouvée pour le dossier N° {reference_propre}. Vérifiez le numéro saisi.")
     
-    # 4. Conservation des 13 colonnes utiles par leur position
     indices_a_garder = [0, 1, 6, 9, 11, 13, 14, 15, 17, 18, 21, 22, 23]
     
     if len(df.columns) <= max(indices_a_garder):
@@ -209,7 +224,6 @@ def traiter_suivi_colis(file, reference_dossier):
     df_final.to_excel(temp_buffer, index=False)
     temp_buffer.seek(0)
     
-    # 5. Mise en forme finale et création du lien cliquable
     wb = openpyxl.load_workbook(temp_buffer)
     ws = wb.active
     ws.title = f"Dossier {reference_propre}"
@@ -220,14 +234,13 @@ def traiter_suivi_colis(file, reference_dossier):
     for cell in ws[1]:
         cell.fill, cell.font, cell.alignment = header_fill, header_font, Alignment(horizontal="center", vertical="center")
         
-    # Ajustement largeur et transformation des liens
     for r in range(2, ws.max_row + 1):
-        cell_lien = ws.cell(row=r, column=13) # La colonne Tracing est maintenant la 13ème
+        cell_lien = ws.cell(row=r, column=13) 
         val = str(cell_lien.value)
         if val.startswith("http"):
             cell_lien.hyperlink = val
-            cell_lien.value = "Lien URL" # Le texte propre qui s'affiche
-            cell_lien.font = Font(color="0563C1", underline="single") # Style bleu souligné
+            cell_lien.value = "Voir le suivi" 
+            cell_lien.font = Font(color="0563C1", underline="single") 
             cell_lien.alignment = Alignment(horizontal="center", vertical="center")
 
     for col in ws.columns:
@@ -241,65 +254,88 @@ def traiter_suivi_colis(file, reference_dossier):
     final_buffer.seek(0)
     return final_buffer
 
-
 # ==========================================
-# INTERFACE UTILISATEUR STREAMLIT
+# BARRE LATÉRALE (MENU)
 # ==========================================
-st.title("🖨️ Outils Web-to-Print")
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3714/3714856.png", width=60) # Petite icône sympa
+st.sidebar.markdown("### Votre boîte à outils")
+st.sidebar.markdown("Sélectionnez le traitement que vous souhaitez effectuer :")
 
-outil = st.sidebar.radio("Sélectionnez l'outil :", [
-    "Facturation Mensuelle", 
-    "Nettoyage des Stocks",
-    "Extraction Suivi Colis (DPD)"
+outil = st.sidebar.radio("", [
+    "📊 Facturation Mensuelle", 
+    "📦 Nettoyage des Stocks",
+    "🚚 Extraction Suivi Colis (DPD)"
 ])
 
-if outil == "Facturation Mensuelle":
-    st.header("Générateur de Tableau de Facturation")
-    st.write("Glissez l'export brut des commandes (ex: `2.xlsx`) pour générer le tableau classé, fusionné et valorisé.")
+st.sidebar.markdown("---")
+st.sidebar.caption("🔧 Développé sur-mesure pour vos opérations Web-to-Print.")
+
+
+# ==========================================
+# CORPS DE L'APPLICATION
+# ==========================================
+st.markdown('<p class="main-title">Portail Web-to-Print</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Automatisation et traitement de vos exports Excel</p>', unsafe_allow_html=True)
+
+if outil == "📊 Facturation Mensuelle":
+    st.header("Facturation Mensuelle")
+    st.info("💡 **Instructions :** Glissez l'export brut des commandes (ex: `2.xlsx`) pour générer le tableau classé, fusionné et valorisé.")
     
-    fichier = st.file_uploader("Importez le fichier Excel de facturation", type=["xlsx"])
+    fichier = st.file_uploader("📂 Importez le fichier Excel de facturation", type=["xlsx"])
     if fichier:
         try:
-            with st.spinner("Traitement en cours..."):
+            with st.spinner("⏳ Traitement en cours..."):
                 fichier_final = traiter_facturation(fichier)
             st.success("✅ Tableau généré avec succès ! Les doublons sont fusionnés et l'export est catégorisé.")
-            st.download_button(label="📥 Télécharger le tableau final", data=fichier_final, file_name="Facturation_Finale.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button(
+                label="📥 Télécharger le tableau final", 
+                data=fichier_final, 
+                file_name="Facturation_Finale.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary" # Rend le bouton bien visible
+            )
         except Exception as e:
             st.error(f"❌ Une erreur est survenue : {e}")
 
-elif outil == "Nettoyage des Stocks":
+elif outil == "📦 Nettoyage des Stocks":
     st.header("Nettoyage du Rapport de Stock")
-    st.write("Glissez l'export brut des stocks (ex: `Report.xlsx`) pour générer la version épurée.")
+    st.info("💡 **Instructions :** Glissez l'export brut des stocks (ex: `Report.xlsx`) pour générer la version épurée et formatée.")
     
-    fichier = st.file_uploader("Importez le rapport de stock", type=["xlsx"])
+    fichier = st.file_uploader("📂 Importez le rapport de stock", type=["xlsx"])
     if fichier:
         try:
-            with st.spinner("Traitement en cours..."):
+            with st.spinner("⏳ Traitement en cours..."):
                 fichier_final = traiter_stock(fichier)
             st.success("✅ Stock nettoyé avec succès ! Formatage et filtres appliqués.")
-            st.download_button(label="📥 Télécharger l'état des stocks", data=fichier_final, file_name="Stock_Final.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button(
+                label="📥 Télécharger l'état des stocks", 
+                data=fichier_final, 
+                file_name="Stock_Final.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
         except Exception as e:
             st.error(f"❌ Une erreur est survenue : {e}")
 
-elif outil == "Extraction Suivi Colis (DPD)":
+elif outil == "🚚 Extraction Suivi Colis (DPD)":
     st.header("Extraction des Suivis Colis (DPD)")
-    st.write("Glissez votre tableau de suivi DPD puis saisissez le numéro de dossier. L'outil génèrera un tableau ciblé avec des liens de suivi cliquables.")
+    st.info("💡 **Instructions :** Glissez votre tableau de suivi DPD brut puis saisissez le numéro de dossier. L'outil génèrera un tableau ciblé avec des liens de suivi cliquables.")
     
-    fichier = st.file_uploader("📥 Importez le fichier de suivi (ex: export_dpd.xlsx)", type=["xlsx"])
+    fichier = st.file_uploader("📂 Importez le fichier de suivi", type=["xlsx"])
     
     if fichier:
-        numero_dossier = st.text_input("📦 Saisissez le numéro de dossier (Votre référence 1) :", placeholder="ex: 2012217")
+        numero_dossier = st.text_input("🎯 Saisissez le numéro de dossier (Votre référence 1) :", placeholder="ex: 2012217")
         
-        if st.button("Rechercher"):
+        if st.button("Rechercher le dossier", type="primary"):
             if numero_dossier:
                 try:
-                    with st.spinner(f"Recherche du dossier {numero_dossier} en cours..."):
+                    with st.spinner(f"⏳ Recherche du dossier {numero_dossier} en cours..."):
                         fichier_traite = traiter_suivi_colis(fichier, numero_dossier)
                         
                         st.session_state['fichier_dpd_pret'] = fichier_traite
                         st.session_state['dossier_dpd_actuel'] = numero_dossier
                 except Exception as e:
-                    st.error(f"{e}")
+                    st.error(f"❌ {e}")
             else:
                 st.warning("⚠️ Veuillez saisir un numéro de dossier avant de cliquer sur Rechercher.")
                 
@@ -309,5 +345,6 @@ elif outil == "Extraction Suivi Colis (DPD)":
             label=f"📥 Télécharger le suivi ({st.session_state['dossier_dpd_actuel']})", 
             data=st.session_state['fichier_dpd_pret'], 
             file_name=f"Suivi_Dossier_{st.session_state['dossier_dpd_actuel']}.xlsx", 
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
         )
