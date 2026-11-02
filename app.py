@@ -7,7 +7,9 @@ import io
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="Outils WebToPrint", page_icon="⚙️", layout="centered")
 
-# --- FONCTION : FACTURATION ---
+# ==========================================
+# 1. FONCTION : FACTURATION
+# ==========================================
 def trouver_categorie(row):
     produit = str(row.get('Product Name', '')).lower()
     pays = str(row.get('Ship Country Name', '')).strip().lower()
@@ -117,7 +119,9 @@ def traiter_facturation(file):
     final_buffer.seek(0)
     return final_buffer
 
-# --- FONCTION : STOCK ---
+# ==========================================
+# 2. FONCTION : STOCK
+# ==========================================
 def traiter_stock(file):
     df = pd.read_excel(file)
     df.columns = df.columns.str.strip() 
@@ -158,10 +162,77 @@ def traiter_stock(file):
     final_buffer.seek(0)
     return final_buffer
 
-# --- INTERFACE UTILISATEUR ---
+
+# ==========================================
+# 3. FONCTION : SUIVI COLIS (MICROLYNX)
+# ==========================================
+def traiter_suivi_colis(file, reference_dossier):
+    df = pd.read_excel(file)
+    
+    # 1. On sécurise le nom de la colonne de référence (la 2ème colonne, donc index 1)
+    ref_col_name = df.columns[1]
+    
+    # On convertit tout en texte pour s'assurer que la recherche trouve le numéro
+    df[ref_col_name] = df[ref_col_name].astype(str).str.strip()
+    reference_propre = str(reference_dossier).strip()
+    
+    # On filtre pour ne garder que les lignes de ce dossier
+    df_filtre = df[df[ref_col_name] == reference_propre].copy()
+    
+    if df_filtre.empty:
+        raise ValueError(f"⚠️ Aucune commande trouvée pour le dossier N° {reference_propre}. Vérifiez le numéro saisi.")
+    
+    # 2. On sélectionne les colonnes par leur POSITION (pour éviter les erreurs si elles sont renommées)
+    # Positions des colonnes demandées : 0, 1, 6, 9, 11, 13, 14, 15, 17, 18, 21, 22, 23
+    indices_a_garder = [0, 1, 6, 9, 11, 13, 14, 15, 17, 18, 21, 22, 23]
+    
+    if len(df.columns) <= max(indices_a_garder):
+        raise ValueError("Le fichier Excel importé n'a pas le format attendu (pas assez de colonnes).")
+        
+    df_final = df_filtre.iloc[:, indices_a_garder].copy()
+    
+    # 3. On reformate proprement les dates pour éviter les 00:00:00
+    for col in df_final.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_final[col]):
+            df_final[col] = df_final[col].dt.strftime('%d/%m/%Y')
+            
+    # Création du fichier final
+    temp_buffer = io.BytesIO()
+    df_final.to_excel(temp_buffer, index=False)
+    temp_buffer.seek(0)
+    
+    wb = openpyxl.load_workbook(temp_buffer)
+    ws = wb.active
+    ws.title = f"Dossier {reference_propre}"
+    
+    header_fill = PatternFill("solid", fgColor="183153")
+    header_font = Font(bold=True, color="FFFFFF")
+    
+    for cell in ws[1]:
+        cell.fill, cell.font, cell.alignment = header_fill, header_font, Alignment(horizontal="center", vertical="center")
+        
+    for col in ws.columns:
+        max_length = max((len(str(c.value)) if c.value else 0 for c in col), default=0)
+        # On limite la largeur à 50 pour éviter des colonnes immenses (ex: adresses longues)
+        ws.column_dimensions[col[0].column_letter].width = min(max_length + 3, 50)
+        
+    ws.auto_filter.ref = ws.dimensions
+
+    final_buffer = io.BytesIO()
+    wb.save(final_buffer)
+    final_buffer.seek(0)
+    return final_buffer
+
+# ==========================================
+# INTERFACE UTILISATEUR STREAMLIT
+# ==========================================
 st.title("🖨️ Outils Web-to-Print")
 
-outil = st.sidebar.radio("Sélectionnez l'outil :", ["Facturation Mensuelle", "Nettoyage des Stocks"])
+outil = st.sidebar.radio("Sélectionnez l'outil :", [
+    "Facturation Mensuelle", 
+    "Nettoyage des Stocks",
+    "Extraction Suivi Colis" # Nouveau menu !
+])
 
 if outil == "Facturation Mensuelle":
     st.header("Générateur de Tableau de Facturation")
@@ -190,3 +261,21 @@ elif outil == "Nettoyage des Stocks":
             st.download_button(label="📥 Télécharger l'état des stocks", data=fichier_final, file_name="Stock_Final.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
             st.error(f"❌ Une erreur est survenue : {e}")
+
+elif outil == "Extraction Suivi Colis":
+    st.header("Extraction des Suivis Colis (Microlynx)")
+    st.write("Saisissez le numéro de dossier puis glissez votre tableau Microlynx. Seules les lignes concernées et les colonnes utiles seront conservées.")
+    
+    # Champ de texte pour saisir la référence
+    numero_dossier = st.text_input("📦 Saisissez le numéro de dossier (Votre référence 1) :", placeholder="ex: 2012217")
+    
+    if numero_dossier:
+        fichier = st.file_uploader("Importez le fichier de suivi (ex: MICROLYNX.xlsx)", type=["xlsx"])
+        if fichier:
+            try:
+                with st.spinner(f"Recherche du dossier {numero_dossier} en cours..."):
+                    fichier_final = traiter_suivi_colis(fichier, numero_dossier)
+                st.success(f"✅ Dossier {numero_dossier} extrait et mis en forme avec succès !")
+                st.download_button(label=f"📥 Télécharger le suivi ({numero_dossier})", data=fichier_final, file_name=f"Suivi_Dossier_{numero_dossier}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            except Exception as e:
+                st.error(f"{e}")
