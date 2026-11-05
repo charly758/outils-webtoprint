@@ -37,7 +37,7 @@ outil = st.sidebar.radio("", [
 ])
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Coucou Dobbie 🧦")
+st.sidebar.caption("🔧 Outils internes - MicroLynx")
 
 
 # ==========================================
