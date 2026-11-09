@@ -52,32 +52,29 @@ def traiter_robinson(file):
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
+    # 6. Formatage des cellules avec VERROUILLAGE DE L'EURO
     for r in range(3, ws.max_row + 1):
         ws.cell(row=r, column=3).number_format = '0'
-        ws.cell(row=r, column=4).number_format = '#,##0.00 €'
+        ws.cell(row=r, column=4).number_format = '#,##0.00" "€'  # Euro forcé
         ws.cell(row=r, column=5).number_format = '0%'
-        ws.cell(row=r, column=6).number_format = '#,##0.00 €'
+        ws.cell(row=r, column=6).number_format = '#,##0.00" "€'  # Euro forcé
         
     # ==========================================
-    # LIGNE DES TOTAUX (LA NOUVEAUTÉ !)
+    # LIGNE DES TOTAUX
     # ==========================================
     total_row = ws.max_row + 1
     
-    # Mention "TOTAL" (alignée à droite sous les numéros de facture)
     cell_total_label = ws.cell(row=total_row, column=3, value="TOTAL")
     cell_total_label.font = Font(bold=True)
     cell_total_label.alignment = Alignment(horizontal="right")
     
-    # Somme Montant (hors TVA)
     cell_sum_montant = ws.cell(row=total_row, column=4, value=f"=SUM(D3:D{total_row-1})")
     cell_sum_montant.font = Font(bold=True)
-    cell_sum_montant.number_format = '#,##0.00 €'
+    cell_sum_montant.number_format = '#,##0.00" "€'  # Euro forcé
     
-    # Somme Commission
     cell_sum_comm = ws.cell(row=total_row, column=6, value=f"=SUM(F3:F{total_row-1})")
     cell_sum_comm.font = Font(bold=True)
-    cell_sum_comm.number_format = '#,##0.00 €'
-        
+    cell_sum_comm.number_format = '#,##0.00" "€'  # Euro forcé
     # ==========================================
         
     for col_idx in range(1, ws.max_column + 1):
