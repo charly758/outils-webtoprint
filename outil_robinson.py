@@ -42,7 +42,7 @@ def traiter_robinson(file):
     ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
     ws['A1'].font = Font(size=14, bold=True)
     
-    # EN-TÊTES MODIFIÉS : Le symbole Euro est ici pour éviter les bugs d'affichage de Numbers
+    # EN-TÊTES MODIFIÉS
     headers = ['Contact', 'Date de facture', 'N° de facture', 'Montant (hors TVA) en €', 'Commission', 'Montant Commission en €']
     header_fill = PatternFill("solid", fgColor="009CA6") 
     header_font = Font(bold=True, color="FFFFFF")
@@ -53,7 +53,7 @@ def traiter_robinson(file):
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
-    # 6. Formatage "Nombre Pur" universel (parfaitement lu par Numbers)
+    # 6. Formatage "Nombre Pur" universel 
     format_nombre_pur = '#,##0.00' 
     
     for r in range(3, ws.max_row + 1):
@@ -72,4 +72,22 @@ def traiter_robinson(file):
     cell_total_label.alignment = Alignment(horizontal="right")
     
     cell_sum_montant = ws.cell(row=total_row, column=4, value=f"=SUM(D3:D{total_row-1})")
-    cell_sum_montant.font
+    cell_sum_montant.font = Font(bold=True)
+    cell_sum_montant.number_format = format_nombre_pur
+    
+    cell_sum_comm = ws.cell(row=total_row, column=6, value=f"=SUM(F3:F{total_row-1})")
+    cell_sum_comm.font = Font(bold=True)
+    cell_sum_comm.number_format = format_nombre_pur
+    # ==========================================
+        
+    for col_idx in range(1, ws.max_column + 1):
+        col_letter = get_column_letter(col_idx)
+        max_length = max((len(str(ws.cell(row=r, column=col_idx).value)) if ws.cell(row=r, column=col_idx).value else 0 for r in range(2, ws.max_row + 1)), default=0)
+        ws.column_dimensions[col_letter].width = max_length + 3
+
+    final_buffer = io.BytesIO()
+    wb.save(final_buffer)
+    final_buffer.seek(0)
+    
+    # C'EST CETTE LIGNE QUI AVAIT SÛREMENT SAUTÉ !
+    return final_buffer, nb_lignes
