@@ -52,12 +52,14 @@ def traiter_robinson(file):
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
-    # 6. Formatage des cellules avec VERROUILLAGE DE L'EURO
+    # 6. Formatage natif compatible MAC & PC
+    format_euro = '#,##0.00\\ €' # Le format officiel reconnu par Excel
+    
     for r in range(3, ws.max_row + 1):
         ws.cell(row=r, column=3).number_format = '0'
-        ws.cell(row=r, column=4).number_format = '#,##0.00" "€'  # Euro forcé
+        ws.cell(row=r, column=4).number_format = format_euro
         ws.cell(row=r, column=5).number_format = '0%'
-        ws.cell(row=r, column=6).number_format = '#,##0.00" "€'  # Euro forcé
+        ws.cell(row=r, column=6).number_format = format_euro
         
     # ==========================================
     # LIGNE DES TOTAUX
@@ -70,11 +72,11 @@ def traiter_robinson(file):
     
     cell_sum_montant = ws.cell(row=total_row, column=4, value=f"=SUM(D3:D{total_row-1})")
     cell_sum_montant.font = Font(bold=True)
-    cell_sum_montant.number_format = '#,##0.00" "€'  # Euro forcé
+    cell_sum_montant.number_format = format_euro
     
     cell_sum_comm = ws.cell(row=total_row, column=6, value=f"=SUM(F3:F{total_row-1})")
     cell_sum_comm.font = Font(bold=True)
-    cell_sum_comm.number_format = '#,##0.00" "€'  # Euro forcé
+    cell_sum_comm.number_format = format_euro
     # ==========================================
         
     for col_idx in range(1, ws.max_column + 1):
