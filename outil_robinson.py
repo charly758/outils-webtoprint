@@ -12,7 +12,7 @@ def traiter_robinson(file):
     if 'RFA' in df.columns:
         df = df.drop(columns=['RFA'])
         
-    # 3. Nettoyage des données pour Excel/Numbers
+    # 3. Nettoyage des données
     if 'N° de facture' in df.columns:
         df['N° de facture'] = df['N° de facture'].astype(str).str.replace(r'\s+', '', regex=True).astype(int)
         
@@ -42,8 +42,7 @@ def traiter_robinson(file):
     ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
     ws['A1'].font = Font(size=14, bold=True)
     
-    # EN-TÊTES MODIFIÉS
-    headers = ['Contact', 'Date de facture', 'N° de facture', 'Montant (hors TVA) en €', 'Commission', 'Montant Commission en €']
+    headers = ['Contact', 'Date de facture', 'N° de facture', 'Montant (hors TVA)', 'Commission', 'Montant Commission']
     header_fill = PatternFill("solid", fgColor="009CA6") 
     header_font = Font(bold=True, color="FFFFFF")
     
@@ -53,14 +52,14 @@ def traiter_robinson(file):
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
         
-    # 6. Formatage "Nombre Pur" universel 
-    format_nombre_pur = '#,##0.00' 
+    # 6. Formatage natif "Devise Euro"
+    format_devise_euro = '[$€-2] #,##0.00' 
     
     for r in range(3, ws.max_row + 1):
         ws.cell(row=r, column=3).number_format = '0'
-        ws.cell(row=r, column=4).number_format = format_nombre_pur
+        ws.cell(row=r, column=4).number_format = format_devise_euro
         ws.cell(row=r, column=5).number_format = '0%'
-        ws.cell(row=r, column=6).number_format = format_nombre_pur
+        ws.cell(row=r, column=6).number_format = format_devise_euro
         
     # ==========================================
     # LIGNE DES TOTAUX
@@ -73,11 +72,11 @@ def traiter_robinson(file):
     
     cell_sum_montant = ws.cell(row=total_row, column=4, value=f"=SUM(D3:D{total_row-1})")
     cell_sum_montant.font = Font(bold=True)
-    cell_sum_montant.number_format = format_nombre_pur
+    cell_sum_montant.number_format = format_devise_euro
     
     cell_sum_comm = ws.cell(row=total_row, column=6, value=f"=SUM(F3:F{total_row-1})")
     cell_sum_comm.font = Font(bold=True)
-    cell_sum_comm.number_format = format_nombre_pur
+    cell_sum_comm.number_format = format_devise_euro
     # ==========================================
         
     for col_idx in range(1, ws.max_column + 1):
@@ -89,5 +88,4 @@ def traiter_robinson(file):
     wb.save(final_buffer)
     final_buffer.seek(0)
     
-    # C'EST CETTE LIGNE QUI AVAIT SÛREMENT SAUTÉ !
     return final_buffer, nb_lignes
