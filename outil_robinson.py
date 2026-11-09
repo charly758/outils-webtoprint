@@ -1,6 +1,7 @@
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Alignment, PatternFill, Font
+from openpyxl.utils import get_column_letter
 import io
 
 def traiter_robinson(file):
@@ -13,15 +14,12 @@ def traiter_robinson(file):
         
     # 3. Nettoyage des données pour Excel
     if 'N° de facture' in df.columns:
-        # Enlève les espaces (y compris insécables) pour en faire un nombre propre
         df['N° de facture'] = df['N° de facture'].astype(str).str.replace(r'\s+', '', regex=True).astype(int)
         
     if 'Montant (hors TVA)' in df.columns:
-        # Enlève les espaces, remplace la virgule par un point
         df['Montant (hors TVA)'] = df['Montant (hors TVA)'].astype(str).str.replace(r'\s+', '', regex=True).str.replace(',', '.').astype(float)
         
     if 'Commission' in df.columns:
-        # Enlève le % et convertit en décimal mathématique
         df['Commission'] = df['Commission'].astype(str).str.replace('%', '', regex=False).astype(float) / 100.0
         
     # 4. Calcul du montant final
@@ -64,10 +62,12 @@ def traiter_robinson(file):
         ws.cell(row=r, column=5).number_format = '0%'          # Commission
         ws.cell(row=r, column=6).number_format = '#,##0.00 €'  # Montant calculé
         
-    # Ajustement des largeurs de colonnes
-    for col in ws.columns:
-        max_length = max((len(str(c.value)) if c.value else 0 for c in col), default=0)
-        ws.column_dimensions[col[0].column_letter].width = max_length + 3
+    # 7. Ajustement des largeurs de colonnes (Corrigé pour ignorer la ligne 1 fusionnée)
+    for col_idx in range(1, ws.max_column + 1):
+        col_letter = get_column_letter(col_idx)
+        # On calcule la largeur max en commençant à la ligne 2 pour éviter le bug "MergedCell"
+        max_length = max((len(str(ws.cell(row=r, column=col_idx).value)) if ws.cell(row=r, column=col_idx).value else 0 for r in range(2, ws.max_row + 1)), default=0)
+        ws.column_dimensions[col_letter].width = max_length + 3
 
     final_buffer = io.BytesIO()
     wb.save(final_buffer)
