@@ -22,9 +22,13 @@ def traiter_robinson(file):
     if 'Commission' in df.columns:
         df['Commission'] = df['Commission'].astype(str).str.replace('%', '', regex=False).astype(float) / 100.0
         
-    # 4. Calcul du montant final
+    # 4. Calcul du montant final (Ligne par ligne)
     df['Montant Commission'] = df['Montant (hors TVA)'] * df['Commission']
     nb_lignes = len(df)
+    
+    # CALCUL DES TOTAUX GLOBAUX EN PYTHON (La nouveauté pour l'Aperçu Mac)
+    total_montant = df['Montant (hors TVA)'].sum()
+    total_commission = df['Montant Commission'].sum()
     
     # 5. Création du fichier Excel
     temp_buffer = io.BytesIO()
@@ -62,7 +66,7 @@ def traiter_robinson(file):
         ws.cell(row=r, column=6).number_format = format_devise_euro
         
     # ==========================================
-    # LIGNE DES TOTAUX
+    # LIGNE DES TOTAUX (Écrite "en dur")
     # ==========================================
     total_row = ws.max_row + 1
     
@@ -70,11 +74,11 @@ def traiter_robinson(file):
     cell_total_label.font = Font(bold=True)
     cell_total_label.alignment = Alignment(horizontal="right")
     
-    cell_sum_montant = ws.cell(row=total_row, column=4, value=f"=SUM(D3:D{total_row-1})")
+    cell_sum_montant = ws.cell(row=total_row, column=4, value=total_montant)
     cell_sum_montant.font = Font(bold=True)
     cell_sum_montant.number_format = format_devise_euro
     
-    cell_sum_comm = ws.cell(row=total_row, column=6, value=f"=SUM(F3:F{total_row-1})")
+    cell_sum_comm = ws.cell(row=total_row, column=6, value=total_commission)
     cell_sum_comm.font = Font(bold=True)
     cell_sum_comm.number_format = format_devise_euro
     # ==========================================
