@@ -5,6 +5,7 @@ import os
 from outil_facturation import traiter_facturation
 from outil_stock import traiter_stock
 from outil_dpd import traiter_suivi_colis
+from outil_robinson import traiter_robinson
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="Portail Web-to-Print", page_icon="🚀", layout="centered")
@@ -33,7 +34,8 @@ st.sidebar.markdown("Sélectionnez le traitement que vous souhaitez effectuer :"
 outil = st.sidebar.radio("", [
     "📊 Facturation Mensuelle", 
     "📦 Nettoyage des Stocks",
-    "🚚 Extraction Suivi Colis (DPD)"
+    "🚚 Extraction Suivi Colis (DPD)",
+    "💰 Récap Robinson"
 ])
 
 st.sidebar.markdown("---")
@@ -54,10 +56,9 @@ if outil == "📊 Facturation Mensuelle":
     if fichier:
         try:
             with st.spinner("⏳ Traitement en cours..."):
-                fichier_final, nb_cmd, nb_manuelles = traiter_facturation(fichier) # APPEL DU MOTEUR
+                fichier_final, nb_cmd, nb_manuelles = traiter_facturation(fichier)
             
             st.success("✅ Tableau généré avec succès !")
-            
             col1, col2 = st.columns(2)
             col1.metric("🛒 Commandes uniques", nb_cmd)
             col2.metric("⚠️ À tarifer manuellement", nb_manuelles)
@@ -80,7 +81,7 @@ elif outil == "📦 Nettoyage des Stocks":
     if fichier:
         try:
             with st.spinner("⏳ Traitement en cours..."):
-                fichier_final, nb_articles = traiter_stock(fichier) # APPEL DU MOTEUR
+                fichier_final, nb_articles = traiter_stock(fichier)
             
             st.success("✅ Stock nettoyé avec succès !")
             st.metric("📦 Articles en stock", nb_articles)
@@ -108,7 +109,7 @@ elif outil == "🚚 Extraction Suivi Colis (DPD)":
             if numero_dossier:
                 try:
                     with st.spinner(f"⏳ Recherche du dossier {numero_dossier} en cours..."):
-                        fichier_traite, nb_colis = traiter_suivi_colis(fichier, numero_dossier) # APPEL DU MOTEUR
+                        fichier_traite, nb_colis = traiter_suivi_colis(fichier, numero_dossier)
                         
                         st.session_state['fichier_dpd_pret'] = fichier_traite
                         st.session_state['dossier_dpd_actuel'] = numero_dossier
@@ -129,3 +130,26 @@ elif outil == "🚚 Extraction Suivi Colis (DPD)":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary"
         )
+
+elif outil == "💰 Récap Robinson":
+    st.header("Récapitulatif Robinson")
+    st.info("💡 **Instructions :** Glissez l'export texte brut de votre ERP (.txt) pour générer le tableau valorisé.")
+    
+    fichier = st.file_uploader("📂 Importez le fichier ERP (TXT)", type=["txt"])
+    if fichier:
+        try:
+            with st.spinner("⏳ Nettoyage et calculs en cours..."):
+                fichier_final, nb_lignes = traiter_robinson(fichier)
+            
+            st.success("✅ Tableau Robinson généré avec succès !")
+            st.metric("🧾 Factures traitées", nb_lignes)
+            
+            st.download_button(
+                label="📥 Télécharger le Récapitulatif", 
+                data=fichier_final, 
+                file_name="Recap_Robinson.xlsx", 
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
+        except Exception as e:
+            st.error(f"Oups ! Ce fichier texte ne semble pas valide. Avez-vous glissé le bon export ? 🧐\n\n*(Détail technique : {e})*")
